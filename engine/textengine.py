@@ -82,6 +82,8 @@ class var:
     area_draw_text_started_at = 0
     area_draw_text_timer = 0
     area_draw_text_value = ''
+    player_model = '*'
+    homepath = '..'
 
 
 class tui:
@@ -201,7 +203,12 @@ class player:
     class model:
         @staticmethod
         def load(source):
-            pass
+            if source in os.listdir(f'{var.homepath}/resources'):
+                with open(f'{var.homepath}/resources/{source}', 'r') as player_model:
+                    player_model = player_model.read().split('\n')[0][0]    # only 1-letter player supported (currently)
+                    var.player_model = player_model
+                return True
+            raise FileNotFoundError(f'resources: source: {var.homepath}/resources/{source}')
 
         @staticmethod
         def remove(name):
@@ -249,6 +256,8 @@ def runcmd(cmd):
 
 def init(homepath='..'):  # from where will be engine ran
     all_settings = ['keybindings', 'player', 'screen']
+
+    var.homepath = homepath
 
     for setting in all_settings:
         if os.path.exists(f'{homepath}/config/{setting}'):
