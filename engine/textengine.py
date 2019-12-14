@@ -7,6 +7,7 @@ from time import sleep
 from getch import getch
 
 
+version = '1.2.1'
 cls = 'cls' if platform.system().lower() == "windows" else 'clear'
 
 
@@ -16,6 +17,8 @@ class resources:
 
 class area:
     __content = []
+    collision_objects = []
+    objects = {}
 
     @staticmethod
     def init():
@@ -58,11 +61,18 @@ class area:
     @staticmethod
     def reload(source, save_player_pos=False):
         if not save_player_pos:
-            player.move([0, 0], reset=True)
+            player.move([5, 5], reset=True)
 
     @staticmethod
-    def add_object(obj, coords):
+    def add_object(obj, coords, collision=False):
+        if collision:
+            area.collision_objects.append(coords)
+        area.objects[obj] = coords
         area.__content[coords[1]][coords[0]] = obj
+
+    @staticmethod
+    def get_obj(coords):
+        return area.__content[coords[1]][coords[0]]
 
     @staticmethod
     def remove_player():
@@ -99,6 +109,7 @@ class var:
     homepath = '..'
     player_last_pos = [0, 0]
     player_previous_obj = ' '
+    player_trail = False
 
 
 class tui:
@@ -171,22 +182,7 @@ class settings:
     screen_resolution = [40, 25]  # 40x25, x, y
     console_enable = False
     cheats_detect = False
-    keybindings_move_binds = {
-        'up': b'w',
-        'down': b's',
-        'left': b'a',
-        'right': b'd'
-    }
-    keybindings_action_binds = {
-        'inventory': b'\t',
-        'menu': b'\x1b',
-        'sitdown': b'c',
-        'liedown': b'x',
-        'interact': b'f',
-        'chat': b't',
-        'console': b'`'
-    }
-    default_player_pos = [0, 0]  # x, y
+    default_player_pos = [5, 0]  # x, y
     area_map_type = 'letter'
     area_map = None
     area_map_object_bindings = {
@@ -238,9 +234,32 @@ class player:
             return var.player_model
 
     @staticmethod
-    def is_collision(coord_type, current_coord, new_coord):
+    def teleport(coords):
+        area.remove_player()
+        area.add_object('*', coords)
+
+    @staticmethod
+    def is_collision(coord_type, current_coord, new_coord):     # simplified function, does not in use
+        # please, do not forget to remove it
         if current_coord + new_coord == -1 or current_coord + new_coord ==\
                 settings.screen_resolution[0 if coord_type == 'x' else 1] + (1 if coord_type == 'y' else 0):
+            return True
+        return False
+
+    @staticmethod
+    def is_collision_object(new_coords):
+        pass
+
+    @staticmethod
+    def collision(new_coords):
+        current_coords = player.get_coords()
+        new_player_coords = [current_coords[0] + new_coords[0], current_coords[1] + new_coords[1]]
+        check_x_coord = True if new_coords[1] == 0 else False
+        if new_player_coords[0] < 0 or new_player_coords[0] >= settings.screen_resolution[0] and check_x_coord:  # x coords check
+            return True
+        if new_player_coords[1] < 0 or new_player_coords[1] >= settings.screen_resolution[1] + 1 and not check_x_coord:  # y coords check
+            return True
+        if new_player_coords in area.collision_objects:     # if possible move goes to the collision object
             return True
         return False
 
@@ -254,20 +273,26 @@ class player:
             player.__x = settings.default_player_pos[0]
             player.__y = settings.default_player_pos[1]
             return
-        x = new_coords[0]
-        y = new_coords[1]
+        x = new_coords[0] + player.__x
+        y = new_coords[1] + player.__y
         steps_area = list(range(-settings.player_max_steps_per_move, settings.player_max_steps_per_move + 1))
         if x not in steps_area or y not in steps_area:
-            raise Exception('cheating: player jumped over max steps number')
+            if settings.cheats_detect:
+                raise Exception('cheating: player jumped over max steps number')
+        is_collision = player.collision(new_coords)
+        future_symbol = area.get_obj([x, y] if not is_collision else [player.__x, player.__y])
+        temp_previous_obj = ' ' if not var.player_trail else '*'
+        if future_symbol != ' ':
+            temp_previous_obj = future_symbol
         var.player_last_pos = [player.__x, player.__y]
-        if new_coords[1] == 0:  # x
-            if not player.is_collision('x', player.__x, new_coords[0]):
-                player.__x += x
-        else:  # y
-            if not player.is_collision('y', player.__y, new_coords[1]):
-                player.__y += y
-        area.remove_player()
-        area.add_object(var.player_model, [player.__x, player.__y])
+        if not is_collision:
+            player.__x = x
+            player.__y = y
+            if not var.player_trail:
+                area.remove_player()
+            area.add_object(var.player_model, [player.__x, player.__y])
+            area.add_object(var.player_previous_obj, [player.__x - new_coords[0], player.__y - new_coords[1]])
+            var.player_previous_obj = temp_previous_obj
 
 
 def close():
